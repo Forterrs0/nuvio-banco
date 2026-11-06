@@ -406,6 +406,30 @@ async function runAction(action, el) {
         await refreshAfterTransaction();showReceipt(tx);toast('Pix interno concluído! Os dois saldos foram atualizados.');
       }catch(ex){toast(ex.message,true);}finally{setBusy(false,el);}break;
     }
+
+      <CodeBlock language="javascript" editable>
+case 'download-receipt': {
+  window.NuviaReceipt.download(state.receipt);
+  toast('Comprovante em PNG baixado.');
+  break;
+}
+
+
+case 'print-receipt': {
+window.NuviaReceipt.print(state.receipt);
+break;
+}
+
+case 'share-receipt': {
+const result = await window.NuviaReceipt.share(state.receipt);
+
+if (result === 'downloaded') {
+toast('Imagem baixada. Você pode enviá-la pelo WhatsApp.');
+}
+break;
+}
+</CodeBlock>
+      
     case 'copy-receipt': {
       try{await navigator.clipboard.writeText(receiptText(state.receipt));toast('Comprovante copiado.');}
       catch(_){toast('Seu navegador não permitiu copiar automaticamente.',true);}break;
