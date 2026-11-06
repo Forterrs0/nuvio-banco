@@ -1,124 +1,130 @@
-# Nuvia — Banco acadêmico (Java + Web)
+# Nuvia — Banco acadêmico com MySQL (Java + Spring Boot)
 
-Projeto completo, com front-end responsivo e back-end Spring Boot, criado para demonstração de operações financeiras internas entre contas **Nuvia**. Mantém uma identidade visual escura em verde-menta e também oferece modo claro.
+O **Nuvia** é um protótipo bancário acadêmico com front-end responsivo, tema escuro/claro, teclado monetário animado e transferências persistentes **entre contas Nuvia cadastradas**.
 
-> **AVISO IMPORTANTE:** Este projeto **não é um banco**, não se conecta à rede Pix oficial, não aceita pagamentos reais e não movimenta dinheiro de verdade. O depósito credita **saldo de demonstração**, persistido no banco de dados local. O "Pix" transfere esse saldo **somente entre contas cadastradas neste mesmo site**. Comprovantes são demonstrativos.
+> **Importante:** NÃO é um banco oficial. Não movimenta reais nem envia Pix pela rede bancária. Depósitos e "Pix" são **operações com saldo virtual demonstrativo**, registrados de verdade no banco MySQL.
 
-## Começar no Windows
+## 1. Requisitos
 
-**Requisitos:** Java JDK 21 e Apache Maven 3.9. O Maven 3.9 é suportado pelo Spring Boot 3.5.16.
+- **Java JDK 21** (`java -version`)
+- **Maven 3.9** (`mvn -version`)
+- **MySQL Server 8.0 ou 8.4** (o serviço precisa estar iniciado)
+- **MySQL Workbench** (recomendado para configurar e visualizar os dados)
 
-1. Extraia esta pasta em um diretório como `C:\Projetos\Nuvia-Banco`.
-2. Abra um terminal **na pasta em que está o `pom.xml`**.
-3. Confirme `java -version` e `mvn -version`. Você também pode iniciar com **duplo clique em `INICIAR_NUVIA.bat`**.
-4. Execute:
+> O Workbench sozinho não é o servidor. Instale e ligue o **MySQL Server** também. Na primeira execução o Maven precisará de internet para baixar as dependências.
 
-   ```powershell
-   mvn spring-boot:run
-   ```
+## 2. Criar o banco MySQL — apenas uma vez
 
-5. Acesse no navegador: **http://localhost:8080**.
-6. Para parar o servidor, pressione `Ctrl+C` no terminal.
+1. Abra o **MySQL Workbench** e conecte ao seu servidor local usando um usuário administrador, geralmente `root`.
+2. Abra `database/00_CRIAR_BANCO_MYSQL.sql`.
+3. **Substitua `TROQUE_ESTA_SENHA_ANTES_DE_EXECUTAR` por uma senha forte, nas duas ocorrências.**
+4. Execute o script usando o botão de raio do Workbench.
+5. O script criará o banco `nuvia_db` e o usuário local `nuvia_app`. Guarde a senha que você configurou.
 
-Na primeira execução, o Maven precisa de **internet** para baixar as dependências. Depois, o H2 salva as contas e transações em `./data/nuvia.mv.db`. O banco de dados permanece ao reiniciar a aplicação (não delete a pasta `data`).
+O script de criação **não cria as tabelas**; isso é responsabilidade do **Flyway** quando o Java iniciar. O script da estrutura está em `src/main/resources/db/migration/V1__estrutura_inicial.sql` e é versionado.
 
-Se a porta 8080 estiver ocupada:
+## 3. Iniciar o site no Windows
+
+1. Na pasta do projeto, dê dois cliques em **`INICIAR_NUVIA.bat`**.
+2. Quando solicitado, informe a **senha MySQL do usuário `nuvia_app`** que você escolheu no passo 2. A senha não aparecerá enquanto você digita.
+3. Aguarde a mensagem de inicialização do Spring Boot.
+4. Abra **http://localhost:8080** no navegador.
+5. Encerre com `Ctrl+C`.
+
+O iniciador usa PowerShell para solicitar a senha sem mostrar os caracteres no terminal e não a grava em arquivo. Também é possível usar um terminal PowerShell diretamente, com leitura de senha oculta:
 
 ```powershell
-$env:PORT=8081
-mvn spring-boot:run
+.\INICIAR_NUVIA.ps1
 ```
 
-## Testando transferências entre usuários
+O script solicitará a senha e iniciará o Maven automaticamente.
 
-1. Abra http://localhost:8080 em uma janela normal do navegador.
-2. Clique em **Criar conta** e cadastre o usuário **Matheus**, com e-mail e telefone próprios.
-3. Entre na conta e clique em **Depositar**. Digite `5`, `0`, `0`: aparece **R$ 5,00**. Confirme o depósito demonstrativo.
-4. Abra outra janela anônima ou outro perfil de navegador. Cadastre **José**, com **outro e-mail e outro telefone**.
-5. Volte à janela de Matheus e escolha **Fazer Pix**. Informe o **e-mail ou telefone** cadastrado para José, digite o valor, clique em **Continuar**, confira o destinatário e confirme.
-6. Confira o novo saldo e o extrato nas **duas** janelas. Se José atualizar o painel, encontrará o Pix recebido.
-7. Clique em uma movimentação para visualizar e copiar seu comprovante demonstrativo.
+## 4. Ver o banco no Workbench
 
-O gráfico exibe entradas, saídas, saldo líquido e quantidade de transações por mês ao passar o mouse (ou tocar/focar) nas colunas.
+1. Conecte no servidor MySQL.
+2. No painel **SCHEMAS**, atualize (refresh) e abra **`nuvia_db`**.
+3. Após o primeiro início do Java, estarão lá: **`user_accounts`**, **`ledger_entries`** e **`flyway_schema_history`**.
+4. Para ver os dados, abra e execute `database/01_CONSULTAS_WORKBENCH.sql`.
 
-## Como a digitação funciona
-
-O campo de valor recebe apenas dígitos e apresenta o número como centavos:
-
-| Digitação | Exibição |
+| Tabela | Para que serve |
 |---|---|
-| `5` | R$ 0,05 |
-| `50` | R$ 0,50 |
-| `500` | R$ 5,00 |
-| `5000` | R$ 50,00 |
+| `user_accounts` | Nome, e-mail, telefone, hash da senha, saldo em centavos |
+| `ledger_entries` | Depósitos virtuais e transferências entre contas, com data e identificadores |
+| `flyway_schema_history` | Histórico das migrações SQL aplicadas pelo Flyway |
 
-Ao digitar, o número faz uma animação leve de entrada. Colar números, usar Backspace e teclado numérico também são suportados. O back-end valida **inteiros em centavos**; números informados pelo navegador não são usados como autorização de saldo.
+O MySQL guarda os dados em seu próprio diretório de armazenamento, que depende da instalação do MySQL Server. **Não espere um arquivo `nuvia.mv.db`: o H2 foi removido da execução principal.**
 
-## Funcionalidades implementadas
+## 5. Teste uma transferência completa
 
-- Cadastro de usuários com nome, e-mail, telefone brasileiro com DDD e senha criptografada com BCrypt.
-- Login com sessão HTTP e proteção CSRF, logout e rotas autenticadas.
-- E-mail e telefone únicos, normalizados; busca de destinatário **somente entre usuários Nuvia**.
-- Depósitos demonstrativos com valores persistidos em H2.
-- Transferências internas entre usuários, por e-mail ou telefone, com débito e crédito numa única transação ACID.
-- Bloqueio pessimista de contas em ordem de ID para reduzir conflitos de concorrência, mais chave idempotente para evitar duplicidade em tentativas repetidas.
-- Validação de valor mínimo e limite de R$ 100.000,00 por operação, de saldo suficiente, de destinatário existente e de transferência para si mesmo.
-- Histórico, comprovantes, filtros no extrato, gráfico por mês, visão mensal e atualização dos saldos após confirmação.
-- Tema escuro/claro, layout responsivo, animações discretas e respeito a `prefers-reduced-motion`.
-- Front-end servido **pelo próprio Spring Boot** — sem servidor Node.js ou build React separado.
+1. Entre em `http://localhost:8080` e registre a conta A, com e-mail e telefone únicos.
+2. Clique em **Depositar** e digite `5`, `0`, `0` → **R$ 5,00**. Confirme: a conta A recebe saldo **virtual** no MySQL.
+3. Abra uma guia anônima ou outro perfil do navegador e registre a conta B, com outro e-mail e telefone.
+4. Volte para A: selecione **Fazer Pix**, digite o **e-mail ou telefone da conta B**, e confirme o valor e o destinatário.
+5. O saldo da conta A diminui e o da conta B aumenta, na **mesma transação de banco**. As duas contas possuem extratos e comprovantes da operação.
+6. Confira os resultados pelo script `database/01_CONSULTAS_WORKBENCH.sql`.
 
-## Organização
+O campo monetário funciona assim: `5` = R$ 0,05; `50` = R$ 0,50; `500` = R$ 5,00; `5000` = R$ 50,00. A digitação tem uma animação leve. O gráfico mostra entradas, saídas e saldo líquido por mês ao passar o mouse ou focar/tocar nas colunas.
+
+## 6. Como o MySQL foi integrado
+
+- Spring Data JPA / Hibernate utiliza o **driver `mysql-connector-j`**.
+- `application.yml` aponta para `jdbc:mysql://localhost:3306/nuvia_db` (host, porta e banco configuráveis).
+- **Flyway** executa os SQL versionados ao iniciar o servidor, criando as tabelas na primeira execução.
+- `spring.jpa.hibernate.ddl-auto=validate`: o Java verifica que a estrutura corresponde às entidades, sem alterar silenciosamente o esquema.
+- As tabelas usam **InnoDB** e chaves estrangeiras, exclusividade de e-mail/telefone, saldo guardado como inteiro de centavos, e uma restrição de idempotência para não duplicar operações.
+- Cada transferência executa **débito + crédito + histórico em uma transação ACID**, com bloqueio pessimista dos usuários envolvidos e checagem de saldo.
+- Consultas e movimentações são realizadas no backend; o navegador não decide qual saldo será debitado.
+
+Variáveis opcionais de conexão:
 
 ```text
-Nuvia-Banco/
-├── pom.xml
-├── README.md
-├── src/
-│   ├── main/
-│   │   ├── java/br/com/nuvia/
-│   │   │   ├── NuviaApplication.java
-│   │   │   ├── config/SecurityConfig.java
-│   │   │   ├── auth/                  # cadastro, login, sessão
-│   │   │   ├── account/               # conta e normalização de telefone
-│   │   │   ├── transfer/              # serviços transacionais e extrato
-│   │   │   └── api/                   # tratamento de erros
-│   │   └── resources/
-│   │       ├── application.yml        # banco H2 persistente
-│   │       └── static/                # HTML, CSS, JS e ícone
-│   └── test/                           # testes Java
-└── data/ (criada automaticamente, não incluída no ZIP)
+NUVIA_DB_HOST=localhost
+NUVIA_DB_PORT=3306
+NUVIA_DB_NAME=nuvia_db
+NUVIA_DB_USER=nuvia_app
+NUVIA_DB_PASSWORD=(senha definida no setup; obrigatoria)
+NUVIA_DB_SSL_MODE=PREFERRED
 ```
 
-## API (mesma origem, sem CORS aberto)
+**Segurança:** a configuração local é adequada para laboratório, não para disponibilizar na internet. Em deploy futuro, usar TLS verificado na conexão MySQL (`VERIFY_IDENTITY`), cookie `Secure`, hospedagem e credenciais seguras, rate limiting e backups. Não configure `allowPublicKeyRetrieval=true` em redes não confiáveis.
 
-| Método | Caminho | Função |
-|---|---|---|
-| GET | `/api/auth/csrf` | Gera token CSRF da sessão |
-| POST | `/api/auth/register` | Cadastra cliente |
-| POST | `/api/auth/login` | Faz login (form-urlencoded) |
-| POST | `/api/auth/logout` | Encerra a sessão |
-| GET | `/api/me` | Dados da conta autenticada |
-| GET | `/api/dashboard` | Saldo, movimentações e gráfico |
-| GET | `/api/transactions?limit=100` | Extrato |
-| GET | `/api/transactions/{id}` | Comprovante autorizado |
-| GET | `/api/recipients/resolve?identifier=` | Identifica conta destinatária |
-| POST | `/api/transactions/deposit` | Crédito virtual demonstrativo |
-| POST | `/api/transactions/transfer` | Transferência interna entre clientes |
+## 7. Testes
 
-As solicitações de depósito e transferência recebem `amountCents` (inteiro) e `idempotencyKey` (UUID). A chave evita repetir a mesma transferência caso o usuário envie a mesma operação novamente. Uma chave reutilizada para valores ou destinatários diferentes retorna erro.
-
-## Testes e pacote executável
+Rode `TESTAR_NUVIA.bat` ou:
 
 ```powershell
 mvn test
-mvn clean package
-java -jar target/nuvia-banco-1.0.0.jar
 ```
 
-**Nota:** na entrega, o código Java foi preparado e o JavaScript validado quanto à sintaxe, mas a compilação Maven e os testes de integração **não puderam ser executados neste ambiente**, pois não há Maven instalado nem acesso ao Maven Central. Execute `mvn test` no seu computador para comprovar a integração de dependências e identificar eventuais ajustes antes de apresentar.
+Os **testes automatizados rápidos** usam um H2 **temporário em memória**, apenas no escopo de testes (`src/test/resources/application-test.yml`). A aplicação normal e os dados dos usuários usam **somente MySQL**. Para validar o MySQL de ponta a ponta, execute os passos da seção 5 com o servidor MySQL ligado.
 
-## Antes de qualquer deploy (ainda NÃO realizado)
+Para gerar um JAR (ainda sem deploy):
 
-Esta versão é intencionalmente um **protótipo acadêmico local**. Para disponibilizar online, serão necessários, no mínimo: banco PostgreSQL com migrações de esquema, HTTPS e cookies Secure obrigatórios, variáveis de ambiente seguras, limite de tentativas de login e consulta de destinatários, observabilidade, políticas de recuperação/backup, auditoria, validação de posse de e-mail/telefone, limites de movimentação por usuário e testes automatizados completos de concorrência e segurança. Depósitos demonstrativos precisam continuar claramente identificados e isolados de qualquer integração bancária de verdade.
+```powershell
+mvn clean package
+```
 
-**Nenhum deploy, conta em nuvem, domínio ou infraestrutura foi configurado.**
+**Limitação de validação desta entrega:** o MySQL Server e o Maven não estavam disponíveis no ambiente de empacotamento. O projeto e os scripts foram revisados estaticamente, mas você precisará executar `mvn test` e o teste prático da seção 5 no seu computador.
+
+## 8. Organização dos arquivos
+
+```text
+Nuvia-Banco-MySQL/
+├── INICIAR_NUVIA.bat
+├── INICIAR_NUVIA.ps1
+├── TESTAR_NUVIA.bat
+├── pom.xml
+├── README.md
+├── database/
+│   ├── 00_CRIAR_BANCO_MYSQL.sql
+│   ├── 01_CONSULTAS_WORKBENCH.sql
+│   └── README.md
+└── src/
+    ├── main/java/br/com/nuvia/      # backend Java
+    ├── main/resources/application.yml
+    ├── main/resources/db/migration/V1__estrutura_inicial.sql
+    ├── main/resources/static/          # frontend existente
+    └── test/                           # testes isolados
+```
+
+**Nenhum deploy foi realizado.** Vamos deixar isso para quando você pedir.
