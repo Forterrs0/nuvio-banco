@@ -22,6 +22,7 @@ public class SecurityConfig {
         http
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/", "/index.html", "/styles.css", "/app.js", "/favicon.svg", "/robots.txt", "/api/auth/csrf", "/api/auth/register", "/api/auth/login").permitAll()
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().denyAll())
             .csrf(csrf -> csrf.csrfTokenRepository(new HttpSessionCsrfTokenRepository()))
@@ -35,7 +36,7 @@ public class SecurityConfig {
                 .logoutSuccessHandler((req, res, auth) -> writeJson(res, mapper, 200, Map.of("message", "Sessão encerrada."))))
             .exceptionHandling(errors -> errors
                 .authenticationEntryPoint((req, res, ex) -> writeJson(res, mapper, 401, Map.of("message", "Faça login para continuar.")))
-                .accessDeniedHandler((req, res, ex) -> writeJson(res, mapper, 403, Map.of("message", "Acesso negado. Atualize a página e tente novamente."))))
+                .accessDeniedHandler((req, res, ex) -> writeJson(res, mapper, 403, Map.of("message", "Você não tem permissão para acessar este recurso."))))
             .headers(headers -> headers
                 .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"))
                 .frameOptions(frame -> frame.deny()))

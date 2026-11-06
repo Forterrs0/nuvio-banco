@@ -8,7 +8,8 @@ const state = {
   csrf: null, dashboard: null, user: null, transactions: [], view: 'dashboard',
   authMode: 'login', theme: localStorage.getItem('nuvia-theme') === 'light' ? 'light' : 'dark',
   balanceHidden: false, statementFilter: 'all', depositKey: null, pendingPix: null,
-  pendingChart: null, busy: false
+  pendingChart: null, busy: false, receipt: null,
+  admin: {users:[], summary:null, search:'', page:0, pages:0, total:0, loading:false, error:'', requestId:0}
 };
 const currency = new Intl.NumberFormat('pt-BR', {style:'currency', currency:'BRL'});
 const fmt = cents => currency.format((Number(cents) || 0) / 100);
@@ -44,7 +45,14 @@ const iconPaths = {
   lock:'<rect x="4" y="10" width="16" height="12" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4"/>',
   mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 6 10 8 10-8"/>',
   phone:'<path d="M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z"/><path d="M11 18h2"/>',
-  checkcircle:'<circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/>'
+  checkcircle:'<circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/>',
+  users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+  calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/>',
+  arrowleft:'<path d="m15 18-6-6 6-6"/>',
+  printer:'<path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/>',
+  download:'<path d="M12 3v12m-4-4 4 4 4-4"/><path d="M4 17v4h16v-4"/>',
+  share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.6 6.6-4.2M8.7 13.4l6.6 4.2"/>' 
 };
 const ico = (name, cls='') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${iconPaths[name]||iconPaths.info}</svg>`;
 const logo = () => `<span class="logo"><span class="logo-mark">N<span>✦</span></span><span>nuvia<span class="brand-dot">.</span></span></span>`;
@@ -159,17 +167,84 @@ function renderApp() {
       ${nav('dashboard','grid','Visão geral',on)}
       ${nav('statement','receipt','Extrato',on)}
       ${nav('card','card','Meu cartão',on)}
+      ${user.admin ? nav('admin','users','Usuários',on) : ''}
     </nav><div class="sidebar-bottom">
       <div class="sidebar-promo"><span class="action-icon">${ico('spark')}</span><h3>Um novo jeito<br>de viver suas finanças.</h3><p>Feito para explorar, aprender e experimentar.</p><span class="micro">NUVIA / DEMO 2026</span></div>
       ${btn('toggle-theme',ico(state.theme==='dark'?'sun':'moon')+' <span>'+(state.theme==='dark'?'Modo claro':'Modo escuro')+'</span>','class="nav-btn"')}
       ${btn('logout',ico('logout')+' <span>Sair da conta</span>','class="nav-btn"')}
-      <div class="profile"><span class="avatar">${esc(initials(user.name))}</span><div class="profile-meta"><strong title="${esc(user.name)}">${esc(user.name)}</strong><small>Minha conta Nuvia</small></div><span class="online-dot"></span></div>
+      <div class="profile"><span class="avatar">${esc(initials(user.name))}</span><div class="profile-meta"><strong title="${esc(user.name)}">${esc(user.name)}</strong><small>${user.admin?'Administrador Nuvia':'Minha conta Nuvia'}</small></div><span class="online-dot"></span></div>
     </div></aside>
-    <main class="main"><div class="main-inner page-entrance">${on==='dashboard'?renderDashboard():on==='statement'?renderStatement():renderCard()}
+    <main class="main"><div class="main-inner page-entrance">${on==='dashboard'?renderDashboard():on==='statement'?renderStatement():on==='admin'&&user.admin?renderAdmin():renderCard()}
     <footer class="footer"><span>Nuvia © 2026</span><span>Projeto acadêmico • Nenhuma operação financeira real</span></footer></div></main></div>`;
 }
 function nav(view,icon,label,active) {
   return `<button class="nav-btn ${active===view?'active':''}" data-action="navigate" data-view="${view}" aria-current="${active===view?'page':'false'}" title="${label}">${ico(icon)}<span>${label}</span>${active===view?'<i class="active-dot"></i>':''}</button>`;
+}
+// A UI is a convenience; authorization is enforced by Spring Security at /api/admin/**.
+function renderAdmin() {
+  const a = state.admin;
+  const summary = a.summary;
+  const start = a.total ? a.page * 10 + 1 : 0;
+  const end = Math.min(a.total, (a.page + 1) * 10);
+  const stats = [
+    ['Total de contas', summary?.totalUsers, 'Contas cadastradas', 'users'],
+    ['Novos cadastros', summary?.newLast30Days, 'Nos últimos 30 dias', 'calendar'],
+    ['Administradores', summary?.administrators, 'Acesso privilegiado', 'shield']
+  ];
+  const rows = a.users.map(u => `<tr>
+    <td><div class="admin-user"><span class="admin-avatar">${esc(initials(u.name))}</span><div><strong>${esc(u.name)}</strong><small>#${esc(u.id)}</small></div></div></td>
+    <td class="admin-email">${esc(u.email)}</td>
+    <td class="admin-phone">${esc(u.phone)}</td>
+    <td><span class="admin-role ${u.admin?'is-admin':''}">${u.admin?'Administrador':'Cliente'}</span></td>
+    <td><span class="admin-date">${u.createdAt?esc(isoDate(u.createdAt)):'—'}</span></td>
+  </tr>`).join('');
+  return `<div class="page-heading admin-heading"><div><div class="eyebrow">NUVIA / ÁREA RESTRITA</div><h1>Gestão de usuários <span class="greeting-star">✳</span></h1><p>Visualize com segurança as pessoas cadastradas na plataforma.</p></div>
+    ${btn('admin-refresh',ico('refresh')+' Atualizar','class="outline-btn" '+(a.loading?'disabled':''))}</div>
+    <div class="admin-kpis">${stats.map(([title,value,subtitle,icon]) => `<section class="admin-kpi"><div class="admin-kpi-top"><span>${title}</span><span class="admin-kpi-icon">${ico(icon)}</span></div><strong class="tabular">${value===undefined?'—':Number(value).toLocaleString('pt-BR')}</strong><small>${subtitle}</small></section>`).join('')}</div>
+    <section class="admin-panel panel" aria-busy="${a.loading}"><div class="admin-panel-top"><div><div class="eyebrow">DIRETÓRIO</div><h2>Contas cadastradas</h2><p>Pesquisa por nome, e-mail ou telefone.</p></div><span class="admin-private">${ico('lock')} Acesso administrativo</span></div>
+      <form class="admin-search-form" id="admin-search-form"><label class="admin-search" for="admin-search-input">${ico('search')}<input id="admin-search-input" name="search" value="${esc(a.search)}" maxlength="100" placeholder="Buscar usuário..." autocomplete="off" aria-label="Pesquisar usuários"></label><button type="submit" class="primary-btn" ${a.loading?'disabled':''}>Buscar</button></form>
+      ${a.error?`<div class="admin-error" role="alert">${ico('info')} ${esc(a.error)}</div>`:''}
+      <div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>USUÁRIO</th><th>E-MAIL</th><th>TELEFONE</th><th>PERFIL</th><th>CADASTRO</th></tr></thead>
+      <tbody>${a.loading?`<tr><td colspan="5"><div class="admin-empty">Carregando usuários...</div></td></tr>`:rows||`<tr><td colspan="5"><div class="admin-empty">${a.error?'Não foi possível carregar os cadastros.':a.search?'Nenhum cadastro encontrado para essa busca.':'Nenhum usuário cadastrado até agora.'}</div></td></tr>`}</tbody></table></div>
+      <div class="admin-pagination"><span>${a.loading?'Consultando...':`Exibindo ${start}–${end} de ${Number(a.total).toLocaleString('pt-BR')} usuários`}</span><div class="admin-pages"><span>Página ${a.page+1} de ${Math.max(1,a.pages)}</span>
+      ${btn('admin-prev',ico('arrowleft'),'class="icon-button" aria-label="Página anterior" '+(a.loading||a.page===0?'disabled':''))}
+      ${btn('admin-next',ico('chevron'),'class="icon-button" aria-label="Próxima página" '+(a.loading||a.page+1>=a.pages?'disabled':''))}
+      </div></div>
+    </section><div class="admin-caption">${ico('shield')} Os dados só são enviados a usuários com permissão de administrador. Senhas e saldos não são expostos neste painel.</div>`;
+}
+async function loadAdmin(page = 0) {
+  if (!state.user?.admin) return;
+  const a = state.admin;
+  const thisRequest = ++a.requestId;
+  a.page = page;
+  a.loading = true;
+  a.error = '';
+  renderApp();
+  try {
+    const params = new URLSearchParams({page:String(page),size:'10',search:a.search});
+    const [users, summary] = await Promise.all([
+      request('/api/admin/users?'+params.toString()),
+      request('/api/admin/summary')
+    ]);
+    if (thisRequest !== a.requestId) return;
+    a.users = users.users;
+    a.total = users.total;
+    a.pages = users.totalPages;
+    a.page = users.page;
+    a.summary = summary;
+  } catch(ex) {
+    if (thisRequest !== a.requestId) return;
+    a.error = ex.message || 'Não foi possível consultar os usuários.';
+    a.users = [];
+    a.total = 0;
+    a.pages = 0;
+    a.summary = null;
+  } finally {
+    if (thisRequest === a.requestId) {
+      a.loading = false;
+      renderApp();
+    }
+  }
 }
 function renderDashboard() {
   const d = state.dashboard;
@@ -246,6 +321,7 @@ function closeModal() {
   document.body.classList.remove('modal-open');
   state.pendingPix = null;
   state.depositKey = null;
+  state.receipt = null;
 }
 function showModal(html) {
   modalRoot.innerHTML = `<div class="modal-backdrop" data-action="backdrop"><section class="modal" role="dialog" aria-modal="true" aria-label="Operação Nuvia">${html}</section></div>`;
@@ -271,15 +347,7 @@ function openDeposit() {
   showModal(`${modalHeader('SUA CONTA NUVIA','Adicionar saldo','Escolha o valor que deseja adicionar ao saldo demonstrativo.')}
     <div class="form-grid">${moneyInput('deposit-value')}
       <div class="info-strip">${ico('info')} Este depósito é simulado. Ele credita saldo virtual no banco de dados para testar transferências entre usuários.</div>
-    </div>
-<div class="modal-actions" style="flex-wrap:wrap;gap:8px">
-  ${btn('close-modal','Fechar','class="outline-btn"')}
-  ${btn('copy-receipt',ico('copy')+' Copiar','class="outline-btn"')}
-  ${btn('download-receipt',ico('arrowdown')+' Baixar PNG','class="outline-btn"')}
-  ${btn('print-receipt',ico('receipt')+' Imprimir / PDF','class="outline-btn"')}
-  ${btn('share-receipt',ico('send')+' Compartilhar','class="primary-btn"')}
-</div>`);
-
+    </div><div class="modal-actions">${btn('close-modal','Cancelar','class="outline-btn"')}${btn('deposit-confirm',ico('plus')+' Depositar','class="primary-btn"')}</div>`);
 }
 function openPix() {
   state.pendingPix = null;
@@ -311,13 +379,48 @@ function receiptText(tx) {
 function showReceipt(tx) {
   state.receipt = tx;
   const isDeposit = tx.type==='DEMO_DEPOSIT';
-  showModal(`${modalHeader('OPERAÇÃO CONCLUÍDA','Comprovante','O registro desta operação está salvo no histórico da conta.')}
+  showModal(`${modalHeader('HISTÓRICO DA CONTA','Comprovante','Gerado a partir de uma operação registrada no Nuvia.')}
     <div class="receipt"><div class="receipt-top"><span class="receipt-check">${ico('check')}</span>
-      <div class="eyebrow">${isDeposit?'DEPÓSITO DEMONSTRATIVO':'PIX INTERNO NUVIA'}</div><strong class="tabular">${fmt(Math.abs(tx.amountCents))}</strong><small>${isoDate(tx.createdAt)}</small></div>
+      <div class="eyebrow">${isDeposit?'DEPÓSITO DEMONSTRATIVO':'TRANSFERÊNCIA INTERNA NUVIA'}</div><strong class="tabular">${fmt(Math.abs(tx.amountCents))}</strong><small>${isoDate(tx.createdAt)}</small></div>
       <dl><dt>De</dt><dd>${esc(tx.senderName)}</dd><dt>Para</dt><dd>${esc(tx.recipientName)}</dd>
-        <dt>Descrição</dt><dd>${esc(tx.description)}</dd><dt>Identificador</dt><dd class="id">${esc(tx.id)}</dd><dt>Situação</dt><dd class="text-mint">Concluído</dd></dl></div>
-      <div class="info-strip" style="margin-top:13px">${ico('info')} Comprovante de operação interna simulada. Não é um comprovante Pix do Sistema de Pagamentos Brasileiro.</div>
-      <div class="modal-actions">${btn('close-modal','Fechar','class="outline-btn"')}${btn('copy-receipt',ico('copy')+' Copiar','class="primary-btn"')}</div>`);
+        <dt>Descrição</dt><dd>${esc(tx.description)}</dd><dt>Identificador</dt><dd class="id">${esc(tx.id)}</dd><dt>Situação</dt><dd class="text-mint">Concluído</dd></dl>
+      <p class="receipt-print-disclaimer">Projeto acadêmico • Operação simulada. Não é um comprovante Pix oficial nem confirma uma movimentação bancária real.</p>
+    </div>
+    <div class="receipt-actions" aria-label="Opções do comprovante">
+      ${btn('print-receipt',ico('printer')+' Imprimir','class="outline-btn"')}
+      ${btn('download-receipt',ico('download')+' Baixar PDF','class="primary-btn"')}
+      ${btn('share-receipt',ico('share')+' Compartilhar','class="outline-btn"')}
+      ${btn('copy-receipt',ico('copy')+' Copiar dados','class="outline-btn"')}
+    </div>`);
+}
+function receiptPdfFilename(tx) {
+  return 'nuvia-comprovante-'+String(tx.id).replace(/[^a-z0-9-]/gi,'')+'.pdf';
+}
+async function receiptPdfBlob(tx) {
+  if (!tx?.id) throw Error('Abra um comprovante antes de continuar.');
+  let res;
+  try {
+    res = await fetch('/api/transactions/'+encodeURIComponent(tx.id)+'/receipt.pdf?download=true', {
+      method:'GET', credentials:'same-origin', cache:'no-store'
+    });
+  } catch (_) { throw Error('Não foi possível conectar ao servidor para gerar o PDF.'); }
+  if (!res.ok) {
+    const payload = await res.json().catch(()=>({}));
+    throw Error(payload.message || (res.status===401?'Entre novamente na sua conta.':'Não foi possível gerar o comprovante.'));
+  }
+  const blob=await res.blob();
+  if(!blob.size || !blob.type.includes('pdf')) throw Error('O servidor não retornou um PDF válido.');
+  return blob;
+}
+function saveReceiptPdf(blob,tx) {
+  const url=URL.createObjectURL(blob);
+  const anchor=document.createElement('a');
+  anchor.href=url;
+  anchor.download=receiptPdfFilename(tx);
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
 }
 function animateMoney(input) {
   const display = document.getElementById(input.id+'-display');
@@ -333,9 +436,9 @@ function setBusy(active, clickedButton) {
   state.busy = active;
   if (clickedButton) {
     clickedButton.disabled = active;
-    clickedButton.dataset.originalText ??= clickedButton.textContent;
+    clickedButton.dataset.originalHtml ??= clickedButton.innerHTML;
     if (active) clickedButton.textContent='Processando...';
-    else clickedButton.textContent=clickedButton.dataset.originalText;
+    else clickedButton.innerHTML=clickedButton.dataset.originalHtml;
   }
 }
 async function refreshAfterTransaction(view = 'dashboard') {
@@ -365,6 +468,9 @@ async function runAction(action, el) {
       break;
     }
     case 'refresh-statement': await navigate('statement');toast('Extrato atualizado.');break;
+    case 'admin-refresh': await loadAdmin(state.admin.page);break;
+    case 'admin-prev': if(state.admin.page>0)await loadAdmin(state.admin.page-1);break;
+    case 'admin-next': if(state.admin.page+1<state.admin.pages)await loadAdmin(state.admin.page+1);break;
     case 'logout': {
       setBusy(true,el);
       try {await request('/api/auth/logout',{method:'POST'});state.user=null;state.dashboard=null;state.csrf=null;await ensureCsrf();showAuth('login');}
@@ -406,30 +512,37 @@ async function runAction(action, el) {
         await refreshAfterTransaction();showReceipt(tx);toast('Pix interno concluído! Os dois saldos foram atualizados.');
       }catch(ex){toast(ex.message,true);}finally{setBusy(false,el);}break;
     }
-
-      <CodeBlock language="javascript" editable>
-case 'download-receipt': {
-  window.NuviaReceipt.download(state.receipt);
-  toast('Comprovante em PNG baixado.');
-  break;
-}
-
-
-case 'print-receipt': {
-window.NuviaReceipt.print(state.receipt);
-break;
-}
-
-case 'share-receipt': {
-const result = await window.NuviaReceipt.share(state.receipt);
-
-if (result === 'downloaded') {
-toast('Imagem baixada. Você pode enviá-la pelo WhatsApp.');
-}
-break;
-}
-</CodeBlock>
-      
+    case 'print-receipt': {
+      if(!state.receipt)return toast('Abra um comprovante para imprimir.',true);
+      window.print();
+      break;
+    }
+    case 'download-receipt': {
+      const tx=state.receipt;
+      setBusy(true,el);
+      try{saveReceiptPdf(await receiptPdfBlob(tx),tx);toast('Comprovante PDF gerado.');}
+      catch(ex){toast(ex.message,true);}
+      finally{setBusy(false,el);}
+      break;
+    }
+    case 'share-receipt': {
+      const tx=state.receipt;
+      setBusy(true,el);
+      try {
+        const blob=await receiptPdfBlob(tx);
+        const file=new File([blob],receiptPdfFilename(tx),{type:'application/pdf'});
+        if(navigator.share && navigator.canShare?.({files:[file]})) {
+          await navigator.share({title:'Comprovante Nuvia (demonstração)',
+            text:'Comprovante de operação simulada do projeto acadêmico Nuvia.',files:[file]});
+        } else {
+          saveReceiptPdf(blob,tx);
+          toast('PDF salvo. Anexe o arquivo no WhatsApp, e-mail ou aplicativo desejado.');
+        }
+      } catch(ex) {
+        if(ex.name!=='AbortError')toast(ex.message||'Não foi possível compartilhar.',true);
+      } finally{setBusy(false,el);}
+      break;
+    }
     case 'copy-receipt': {
       try{await navigator.clipboard.writeText(receiptText(state.receipt));toast('Comprovante copiado.');}
       catch(_){toast('Seu navegador não permitiu copiar automaticamente.',true);}break;
@@ -437,7 +550,9 @@ break;
   }
 }
 async function navigate(view) {
+  if(view==='admin' && !state.user?.admin) return;
   state.view = view;
+  if(view==='admin') return loadAdmin(0);
   if (view==='statement') {
     try{state.transactions=await request('/api/transactions?limit=100');}
     catch(ex){toast(ex.message,true);}
@@ -475,6 +590,12 @@ document.addEventListener('keydown',event=>{
   }
 });
 document.addEventListener('submit',event=>{
+  if(event.target.id==='admin-search-form'){
+    event.preventDefault();
+    state.admin.search = String(new FormData(event.target).get('search')||'').trim();
+    loadAdmin(0);
+    return;
+  }
   if(event.target.id==='auth-form'){
     event.preventDefault();
     submitAuth(event.target);

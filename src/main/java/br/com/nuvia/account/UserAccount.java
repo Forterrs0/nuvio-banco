@@ -21,6 +21,8 @@ public class UserAccount {
     private String passwordHash;
     @Column(nullable = false)
     private long balanceCents;
+    @Column(name = "is_admin", nullable = false)
+    private boolean admin;
     @Version
     private long version;
     @Column(nullable = false, updatable = false)
@@ -40,6 +42,7 @@ public class UserAccount {
     public String getPhone() { return phone; }
     public String getPasswordHash() { return passwordHash; }
     public long getBalanceCents() { return balanceCents; }
+    public boolean isAdmin() { return admin; }
     public Instant getCreatedAt() { return createdAt; }
     public void credit(long cents) { this.balanceCents = Math.addExact(this.balanceCents, cents); }
     public void debit(long cents) {

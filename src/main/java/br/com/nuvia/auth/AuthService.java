@@ -32,10 +32,10 @@ public class AuthService implements UserDetailsService {
             @NotBlank(message = "Informe sua senha.") @Size(min = 8, max = 72, message = "A senha precisa ter entre 8 e 72 caracteres.") String password
     ) {}
 
-    public record UserView(Long id, String name, String email, String phone, long balanceCents) {
+    public record UserView(Long id, String name, String email, String phone, long balanceCents, boolean admin) {
         public static UserView of(UserAccount user) {
             return new UserView(user.getId(), user.getFullName(), user.getEmail(),
-                    user.getPhone(), user.getBalanceCents());
+                    user.getPhone(), user.getBalanceCents(), user.isAdmin());
         }
     }
 
@@ -61,7 +61,7 @@ public class AuthService implements UserDetailsService {
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         UserAccount user = accounts.findByEmail(normalizeEmail(email))
                 .orElseThrow(() -> new UsernameNotFoundException("Credenciais inválidas"));
-        return User.withUsername(user.getEmail()).password(user.getPasswordHash()).roles("CUSTOMER").build();
+        return User.withUsername(user.getEmail()).password(user.getPasswordHash()).roles(user.isAdmin() ? "ADMIN" : "CUSTOMER").build();
     }
 
     public static String normalizeEmail(String value) {
