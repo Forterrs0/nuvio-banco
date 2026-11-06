@@ -1,6 +1,5 @@
-# Nuvia - banco MySQL 8.x (configuracao local)
-# Usuario e senha MySQL entram por variaveis de ambiente.
-# Nao comite credenciais em repositorios.
+
+# Nuvia - MySQL 8.x
 server:
   port: ${PORT:8080}
   error:
@@ -12,17 +11,20 @@ server:
         http-only: true
         same-site: strict
         secure: ${NUVIA_SECURE_COOKIE:false}
+
 spring:
   application:
     name: nuvia-banco
+
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: "jdbc:mysql://${NUVIA_DB_HOST:localhost}:${NUVIA_DB_PORT:3306}/${NUVIA_DB_NAME:nuvia_db}?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&sslMode=${NUVIA_DB_SSL_MODE:PREFERRED}&allowPublicKeyRetrieval=${NUVIA_DB_ALLOW_PUBLIC_KEY_RETRIEVAL:false}"
-    username: ${NUVIA_DB_USER:nuvia_app}
-    password: ${NUVIA_DB_PASSWORD}
+    url: "jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:nuvia_db}?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&sslMode=REQUIRED&allowPublicKeyRetrieval=false"
+    username: ${DB_USER:nuvia_app}
+    password: ${DB_PASSWORD}
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
+
   jpa:
     open-in-view: false
     hibernate:
@@ -31,11 +33,14 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+
   flyway:
     enabled: true
     locations: classpath:db/migration
+
   jackson:
     time-zone: America/Bahia
+
 logging:
   level:
     org.hibernate.SQL: WARN
