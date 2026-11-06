@@ -12,7 +12,7 @@ CREATE USER IF NOT EXISTS 'nuvia_app'@'localhost'
 
 -- Garante que a senha escolhida fique atualizada em instalacoes repetidas.
 ALTER USER 'nuvia_app'@'localhost'
-  IDENTIFIED BY 'careca1521212';
+  IDENTIFIED BY 'TROQUE_ESTA_SENHA_ANTES_DE_EXECUTAR';
 
 -- Permissoes limitadas ao banco do prototipo local (incluem migracoes Flyway).
 GRANT ALL PRIVILEGES ON nuvia_db.* TO 'nuvia_app'@'localhost';
