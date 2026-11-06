@@ -271,7 +271,15 @@ function openDeposit() {
   showModal(`${modalHeader('SUA CONTA NUVIA','Adicionar saldo','Escolha o valor que deseja adicionar ao saldo demonstrativo.')}
     <div class="form-grid">${moneyInput('deposit-value')}
       <div class="info-strip">${ico('info')} Este depósito é simulado. Ele credita saldo virtual no banco de dados para testar transferências entre usuários.</div>
-    </div><div class="modal-actions">${btn('close-modal','Cancelar','class="outline-btn"')}${btn('deposit-confirm',ico('plus')+' Depositar','class="primary-btn"')}</div>`);
+    </div>
+<div class="modal-actions" style="flex-wrap:wrap;gap:8px">
+  ${btn('close-modal','Fechar','class="outline-btn"')}
+  ${btn('copy-receipt',ico('copy')+' Copiar','class="outline-btn"')}
+  ${btn('download-receipt',ico('arrowdown')+' Baixar PNG','class="outline-btn"')}
+  ${btn('print-receipt',ico('receipt')+' Imprimir / PDF','class="outline-btn"')}
+  ${btn('share-receipt',ico('send')+' Compartilhar','class="primary-btn"')}
+</div>`);
+
 }
 function openPix() {
   state.pendingPix = null;
